@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vibe OS | Quantum Knot Beat-Sync</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="visualizer-template.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; cursor: none; }
+        #ui { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; background: #000;
+        }
+        .btn { 
+            padding: 20px 80px; border: 2px solid #00FF00; background: none; 
+            color: #00FF00; cursor: pointer; text-transform: uppercase; 
+            font-family: 'Courier New', monospace; font-size: 30px; letter-spacing: 12px; 
+            box-shadow: 0 0 20px rgba(0,255,0,0.3); transition: 0.3s;
+        }
+        .btn:hover { background: #00FF00; color: #000; box-shadow: 0 0 50px #00FF00; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        
+        <label for="loader" class="btn">QUANTUM FLOW</label>
+        <input type="file" id="loader" accept="audio/*" style="display:none">
+    </div>
+    <audio id="audio-element" crossorigin="anonymous"></audio>
+
+    <script>
+        class QuantumKnot extends AudioVisualizer {
+            constructor() {
+                super({ ui: { title: 'QUANTUM_KNOT', buttonText: 'QUANTUM FLOW' } });
+            }
+            setupCanvas() {
+                createCanvas(windowWidth, windowHeight);
+                colorMode(HSB, 360, 100, 100, 100);
+            }
+        }
+
+        let visualizer;
+        let sBass = 0, sMid = 0, sTreble = 0;
+        let beatAnim = 0; // Physics: Decay variable for beat pulse
+
+        function setup() {
+            visualizer = new QuantumKnot();
+            visualizer.setupCanvas();
+        }
+
+        function draw() {
+            // Decay trails
+            background(0, 0, 0, 10);
+
+            if (visualizer && visualizer.isPlaying && visualizer.analyzer) {
+                visualizer.analyzer.getByteFrequencyData(visualizer.dataArray);
+                
+                sBass = lerp(sBass, visualizer.getBass(), 0.15);
+                sMid = lerp(sMid, visualizer.getMid(), 0.15);
+                sTreble = lerp(sTreble, visualizer.getTreble(), 0.15);
+
+                // PHYSICS: Beat Detection & Impulse
+                if (visualizer.isBeat()) {
+                    beatAnim = 1.0; // Trigger "high energy" state
+                }
+                beatAnim = lerp(beatAnim, 0, 0.1); // Decay back to 0
+
+                translate(width/2, height/2);
+
+                // Beat-synced Color: Saturation and Brightness spike on beat
+                let hueBase = (frameCount * 0.5 + sMid) % 360;
+                let dynamicSat = map(beatAnim, 0, 1, 80, 40); // Desaturate to white-ish on beat
+                let dynamicBri = map(beatAnim, 0, 1, 60, 100); // Glow brighter on beat
+
+                noFill();
+
+                // --- EDGE RESONANCE ---
+                push();
+                strokeWeight(map(sTreble, 0, 255, 0.5, 3));
+                for (let i = 0; i < 4; i++) {
+                    stroke((hueBase + 180) % 360, dynamicSat, dynamicBri, 20 + (beatAnim * 30)); 
+                    beginShape();
+                    for (let a = 0; a < TWO_PI; a += 0.1) {
+                        let boundaryRadius = max(width, height) * 0.45;
+                        // Frequency wiggles faster on beat
+                        let timeScale = frameCount * 0.02 + (beatAnim * 0.1);
+                        let r = boundaryRadius + sin(a * 6 + timeScale) * (sTreble * 1.2);
+                        let x = r * sin(a * (i + 1) * 0.2 + timeScale);
+                        let y = r * cos(a * 1.5 + timeScale);
+                        vertex(x, y);
+                    }
+                    endShape(CLOSE);
+                }
+                pop();
+
+                // --- MAIN KNOT ---
+                strokeWeight(map(sBass, 0, 255, 1, 5) + (beatAnim * 3));
+                for (let i = 0; i < 8; i++) {
+                    stroke((hueBase + i * 20) % 360, dynamicSat, dynamicBri, 50 + (beatAnim * 50));
+                    
+                    beginShape();
+                    for (let a = 0; a < TWO_PI; a += 0.05) {
+                        // Amplitude of the knot expands on beat
+                        let timeScale = frameCount * 0.05 + (beatAnim * 0.2);
+                        let r = (200 + (beatAnim * 50)) + sin(a * 4 + timeScale) * sMid;
+                        
+                        let x = r * sin(a * (i + 1) * 0.5 + frameCount * 0.02);
+                        let y = r * cos(a * 2 + frameCount * 0.01);
+                        
+                        // Gravitational "pull" is now a smooth impulse
+                        let pull = 1.0 + (beatAnim * 0.2); 
+                        vertex(x * pull, y * pull);
+                    }
+                    endShape(CLOSE);
+                }
+            }
+        }
+
+        function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+        
+        document.getElementById('loader').addEventListener('change', () => {
+            document.getElementById('ui').style.opacity = '0';
+            setTimeout(() => { document.getElementById('ui').style.display = 'none'; }, 500);
+        });
+    </script>
+</body>
+</html>
