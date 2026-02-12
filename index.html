@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIBE OS | Neural Link</title>
+    <style>
+        :root { --neon: #00FF00; --bg: #050505; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); font-family: 'Courier New', monospace; overflow: hidden; color: var(--neon); }
+        
+        /* Side Navigation */
+        #sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; width: 280px;
+            background: rgba(0,0,0,0.95); border-right: 2px solid var(--neon);
+            z-index: 1000; transition: transform 0.4s cubic-bezier(0.85, 0, 0.15, 1);
+            padding: 30px 20px; box-sizing: border-box;
+            overflow-y: auto;
+            transform: translateX(-100%);
+        }
+        #sidebar:hover { transform: translateX(0); }
+        
+        /* Hover trigger zone */
+        #hover-zone {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 50px;
+            z-index: 999;
+        }
+        #hover-zone:hover ~ #sidebar { transform: translateX(0); }
+        #pause-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center; justify-content: center;
+        }
+        #pause-overlay.active { display: flex; }
+        #pause-btn {
+            background: var(--neon);
+            color: #000;
+            border: none;
+            font-size: 20px;
+            padding: 20px 50px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 3px;
+            box-shadow: 0 0 40px var(--neon), 0 0 80px rgba(0, 255, 0, 0.3);
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        #pause-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 60px var(--neon), 0 0 120px rgba(0, 255, 0, 0.5);
+        }
+        #pause-btn:focus {
+            outline: none;
+            transform: scale(1.08);
+            box-shadow: 0 0 80px var(--neon), 0 0 150px rgba(0, 255, 0, 0.6);
+        }
+
+        h2 { font-size: 11px; letter-spacing: 3px; border-bottom: 2px solid var(--neon); padding-bottom: 12px; margin: 0 0 20px 0; text-transform: uppercase; font-weight: bold; }
+
+        .nav-item {
+            display: block; width: 100%; padding: 15px 12px; margin-bottom: 12px;
+            border: 1.5px solid var(--neon); background: rgba(0, 255, 0, 0.05); 
+            color: var(--neon);
+            text-align: left; cursor: pointer; text-transform: uppercase;
+            font-size: 10px; letter-spacing: 1px; transition: all 0.3s;
+            border-radius: 3px;
+        }
+        .nav-item:hover { 
+            background: rgba(0, 255, 0, 0.15); 
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3), inset 0 0 10px rgba(0, 255, 0, 0.1);
+            transform: translateX(5px);
+        }
+        .nav-item:focus {
+            outline: none;
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: 0 0 25px var(--neon), inset 0 0 15px rgba(0, 255, 0, 0.15);
+        }
+        .nav-item.active { 
+            background: var(--neon); 
+            color: #000; 
+            font-weight: bold;
+            box-shadow: 0 0 30px var(--neon);
+        }
+
+        /* Main Viewport */
+        #viewport {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: none;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            #sidebar { width: 200px; padding: 20px 15px; }
+            .nav-item { padding: 12px 10px; font-size: 9px; margin-bottom: 10px; }
+            h2 { font-size: 10px; letter-spacing: 2px; }
+        }
+
+        @media (max-width: 480px) {
+            #sidebar { width: 160px; padding: 15px 10px; }
+            .nav-item { padding: 10px 8px; font-size: 8px; }
+            #pause-btn { font-size: 16px; padding: 15px 35px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hover-zone"></div>
+
+    <div id="sidebar">
+        <h2>CORE_MODULES</h2>
+        <div id="file-list"></div>
+    </div>
+
+    <iframe id="viewport" src="" allow="autoplay"></iframe>
+
+    <div id="pause-overlay">
+        <button id="pause-btn">BACK TO MENU</button>
+    </div>
+
+    <script>
+        // 1. LIST YOUR FILENAMES HERE (Exactly as they are named in the folder)
+        const files = [
+            { name: "1 | HYPERSPACE", url: "1.html" },
+            { name: "2 | NEON GLITCH", url: "2.html" },
+            { name: "3 | CYBER LINEN", url: "3.html" },
+            { name: "4 | GLITCH MATRIX", url: "4.html" },
+            { name: "5 | NEURAL ARCHIVE", url: "5.html" }, 
+            { name: "6 | corrupted arch", url: "6.html" },  
+        ];
+
+        const fileList = document.getElementById('file-list');
+        const viewport = document.getElementById('viewport');
+        const sidebar = document.getElementById('sidebar');
+        const pauseOverlay = document.getElementById('pause-overlay');
+        const pauseBtn = document.getElementById('pause-btn');
+
+        // Initialize Menu
+        files.forEach((file, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'nav-item';
+            btn.innerText = `[0${index + 1}] ${file.name}`;
+            btn.onclick = () => loadModule(file.url, btn);
+            fileList.appendChild(btn);
+        });
+
+        function loadModule(url, element) {
+            // Update active state
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            element.classList.add('active');
+            // Set iframe source
+            viewport.src = url;
+        }
+
+        // Pause button returns to menu
+        pauseBtn.onclick = () => {
+            stopModule();
+        };
+
+        // ESC key also stops module
+        document.addEventListener('keydown', (e) => {
+            if (viewport.src && e.key === 'Escape') {
+                stopModule();
+            }
+        });
+
+        function stopModule() {
+            pauseOverlay.classList.remove('active');
+            viewport.src = '';
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vibe Pulse | Hyper-Object</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; cursor: none; }
+        #ui { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; background: #000;
+        }
+        .btn { 
+            padding: 20px 80px; border: 2px solid #00FF00; background: none; 
+            color: #00FF00; cursor: pointer; text-transform: uppercase; 
+            font-family: 'Courier New', monospace; font-size: 30px; letter-spacing: 12px; 
+            box-shadow: 0 0 20px rgba(0,255,0,0.3); transition: 0.3s;
+        }
+        .btn:hover { background: #00FF00; color: #000; box-shadow: 0 0 50px #00FF00; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <input type="file" id="loader" accept="audio/*" style="display:none">
+        <label for="loader" class="btn">HYPERSPACE</label>
+    </div>
+    <audio id="audio-element" crossorigin="anonymous"></audio>
+
+    <script>
+        let audioCtx, analyzer, dataArray, source;
+        let isPlaying = false;
+        let rotX = 0, rotY = 0, rotZ = 0;
+        let zoom = 0;
+
+        const audioEl = document.getElementById('audio-element');
+        const loader = document.getElementById('loader');
+
+        loader.onchange = function() {
+            const file = this.files[0];
+            audioEl.src = URL.createObjectURL(file);
+            document.getElementById('ui').style.opacity = 0;
+            setTimeout(() => document.getElementById('ui').style.display = 'none', 300);
+            initAudio();
+        };
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyzer = audioCtx.createAnalyser();
+            analyzer.fftSize = 512;
+            source = audioCtx.createMediaElementSource(audioEl);
+            source.connect(analyzer);
+            analyzer.connect(audioCtx.destination);
+            dataArray = new Uint8Array(analyzer.frequencyBinCount);
+            audioEl.play();
+            isPlaying = true;
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight, WEBGL);
+            setAttributes('antialias', true);
+        }
+
+        function draw() {
+            // OPTIMIZED MOTION BLUR: Draw a semi-transparent black box over the screen
+            push();
+            resetMatrix();
+            noStroke();
+            fill(0, 40); // Trail density
+            rect(-width/2, -height/2, width, height);
+            pop();
+
+            if (isPlaying) {
+                analyzer.getByteFrequencyData(dataArray);
+
+                let bass = getAvg(0, 10);
+                let mid = getAvg(20, 60);
+                let treble = getAvg(100, 150);
+                let isBeat = bass > 220;
+
+                // Reactive Camera Zoom
+                zoom = lerp(zoom, map(bass, 0, 255, -200, 300), 0.1);
+                translate(0, 0, zoom);
+
+                // Smoother Rotation physics
+                rotX += map(bass, 0, 255, 0.005, 0.03);
+                rotY += map(mid, 0, 255, 0.005, 0.03);
+                rotZ += map(treble, 0, 255, 0.01, 0.08);
+
+                rotateX(rotX);
+                rotateY(rotY);
+                rotateZ(rotZ);
+
+                let hyperSize = map(bass, 0, 255, 150, 450);
+
+                // 1. NEURAL CORE (The "Box")
+                strokeWeight(isBeat ? 4 : 1);
+                stroke(255, 50, 100);
+                noFill();
+                box(hyperSize);
+
+                // 2. CHROMATIC SHELLS (More efficient than sphere/torus)
+                drawReactiveShell(hyperSize * 1.2, mid, color(0, 255, 200), 1);
+                drawReactiveShell(hyperSize * 1.5, treble, color(200, 0, 255), -1.2);
+
+                // 3. THE "GLITCH" OVERLAY
+                if (isBeat) {
+                    stroke(255);
+                    strokeWeight(0.5);
+                    for(let i=0; i<5; i++) {
+                        let x = random(-width, width);
+                        line(x, -height, x, height);
+                    }
+                }
+            }
+        }
+
+        // Optimized custom geometry loop
+        function drawReactiveShell(size, val, col, dir) {
+            push();
+            rotateX(frameCount * 0.01 * dir);
+            rotateZ(frameCount * 0.01);
+            stroke(col);
+            strokeWeight(map(val, 0, 255, 0.5, 3));
+            
+            // Draw a circular vertex shell instead of a heavy sphere
+            beginShape(LINES);
+            for (let i = 0; i < 360; i += 30) {
+                let rad = radians(i);
+                let x = cos(rad) * size;
+                let y = sin(rad) * size;
+                vertex(x, y, 0);
+                vertex(0, 0, size * (val/100));
+            }
+            endShape();
+            pop();
+        }
+
+        function getAvg(start, end) {
+            let sum = 0;
+            for (let i = start; i <= end; i++) sum += dataArray[i];
+            return sum / (end - start + 1);
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>

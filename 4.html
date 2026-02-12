@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glitch Matrix | Tactical HUD</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; cursor: none; }
+        #ui { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; background: #000;
+        }
+        .btn { 
+            padding: 20px 80px; border: 2px solid #00FF00; background: none; 
+            color: #00FF00; cursor: pointer; text-transform: uppercase; 
+            font-family: 'Courier New', monospace; font-size: 30px; letter-spacing: 12px; 
+            box-shadow: 0 0 20px rgba(0,255,0,0.3); transition: 0.3s;
+        }
+        .btn:hover { background: #00FF00; color: #000; box-shadow: 0 0 50px #00FF00; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>SYSTEM_ACCESS</h1>
+        <input type="file" id="loader" accept="audio/*" style="display:none">
+        <label for="loader" class="btn">GLITCH MATRIX</label>
+    </div>
+
+    <audio id="audio-element" crossorigin="anonymous"></audio>
+
+    <script>
+        let audioContext, analyzer, dataArray, source;
+        let isPlaying = false;
+        const audioEl = document.getElementById('audio-element');
+        const loader = document.getElementById('loader');
+        const ui = document.getElementById('ui');
+
+        let cells = [];
+        let glitchY = 0;
+        let glitchShift = 0;
+
+        loader.onchange = function() {
+            const files = this.files;
+            const file = URL.createObjectURL(files[0]);
+            audioEl.src = file;
+            ui.style.display = 'none';
+            initAudio();
+        };
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyzer = audioContext.createAnalyser();
+            analyzer.fftSize = 256;
+            source = audioContext.createMediaElementSource(audioEl);
+            source.connect(analyzer);
+            analyzer.connect(audioContext.destination);
+            dataArray = new Uint8Array(analyzer.frequencyBinCount);
+            audioEl.play();
+            isPlaying = true;
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            textFont('Courier New');
+            // Matrix colors: Bright Phosphorus Green
+            colorMode(HSB, 360, 100, 100, 255);
+        }
+
+        function draw() {
+            // Extreme dark background with low persistence for "ghosting"
+            background(0, 0, 0, 80);
+
+            if (isPlaying) {
+                analyzer.getByteFrequencyData(dataArray);
+
+                let bass = getAvg(0, 5);
+                let highs = getAvg(50, 100);
+                let isBeat = bass > 210;
+
+                // 1. DATA GRID
+                drawDataGrid(bass, highs, isBeat);
+
+                // 2. THE GLITCH (Mind Blow Logic)
+                if (isBeat) {
+                    glitchY = random(height);
+                    glitchShift = random(-100, 100);
+                    drawSystemAlert(bass);
+                }
+                
+                // Random scanning line
+                stroke(140, 100, 100, 30);
+                line(0, (frameCount * 5) % height, width, (frameCount * 5) % height);
+            }
+        }
+
+        function drawDataGrid(bass, highs, isBeat) {
+            let cols = 40;
+            let rows = 25;
+            let w = width / cols;
+            let h = height / rows;
+
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    let index = (i + j) % dataArray.length;
+                    let val = dataArray[index];
+                    
+                    if (val > 150) {
+                        let x = i * w;
+                        let y = j * h;
+                        
+                        // Vertical "sideways" displacement based on highs
+                        let xOff = (j % 2 == 0) ? sin(frameCount * 0.1) * 10 : -sin(frameCount * 0.1) * 10;
+                        
+                        fill(140, 80, map(val, 0, 255, 20, 100), map(val, 0, 255, 50, 200));
+                        textSize(map(bass, 0, 255, 10, 24));
+                        
+                        // Draw random binary or hex-like chars
+                        let char = random([0, 1, 'X', '+', '_', '#']);
+                        text(char, x + xOff, y);
+                        
+                        // Occasional connecting lines (Up/Down)
+                        if (isBeat && random() > 0.9) {
+                            stroke(140, 100, 100, 100);
+                            line(x, 0, x, height);
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawSystemAlert(bass) {
+            // Horizontal Slice Displacement
+            let sliceH = random(50, 200);
+            copy(0, glitchY, width, sliceH, glitchShift, glitchY, width, sliceH);
+            
+            // Bright flickering boxes
+            noFill();
+            stroke(140, 100, 100, 200);
+            rect(random(width), random(height), bass, 2);
+        }
+
+        function getAvg(s, e) {
+            let total = 0;
+            for (let i = s; i <= e; i++) total += dataArray[i];
+            return total / (e - s + 1);
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Archive | Heavy Rotation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; cursor: none; }
+        #ui { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; background: #000;
+        }
+        .btn { 
+            padding: 20px 80px; border: 2px solid #00FF00; background: none; 
+            color: #00FF00; cursor: pointer; text-transform: uppercase; 
+            font-family: 'Courier New', monospace; font-size: 30px; letter-spacing: 12px; 
+            box-shadow: 0 0 20px rgba(0,255,0,0.3); transition: 0.3s;
+        }
+        .btn:hover { background: #00FF00; color: #000; box-shadow: 0 0 50px #00FF00; }
+    </style>
+</head>
+<body>
+    <div id="ui"><input type="file" id="loader" style="display:none"><label for="loader" class="btn">CORRUPTED ARCH</label></div>
+    <audio id="audio-element" crossorigin="anonymous"></audio>
+
+    <script>
+        let audioContext, analyzer, dataArray, source;
+        let isPlaying = false;
+        let tX = 0, tY = 0;
+        let spine = [];
+        const segmentCount = 30;
+        let flareAlpha = 0;
+        let worldRot = 0;
+        
+        // HEAVY ROTATION CONTROLS
+        let currentOrbitAngle = 0;
+        let orbitVelocity = 0;
+        const friction = 0.96; // Higher number = more weight/longer rotation
+
+        const audioEl = document.getElementById('audio-element');
+        const loader = document.getElementById('loader');
+
+        loader.onchange = function() {
+            audioEl.src = URL.createObjectURL(this.files[0]);
+            document.getElementById('ui').style.display = 'none';
+            initAudio();
+        };
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyzer = audioContext.createAnalyser();
+            analyzer.fftSize = 256;
+            source = audioContext.createMediaElementSource(audioEl);
+            source.connect(analyzer);
+            analyzer.connect(audioContext.destination);
+            dataArray = new Uint8Array(analyzer.frequencyBinCount);
+            audioEl.play();
+            isPlaying = true;
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            tX = width/4; tY = height/4;
+            for(let i=0; i<segmentCount; i++) spine.push({x: width/4, y: 0});
+        }
+
+        function draw() {
+            background(0, 0, 0, 45); 
+
+            if (isPlaying) {
+                analyzer.getByteFrequencyData(dataArray);
+                let bass = getAvg(0, 10);
+                let treble = getAvg(50, 100);
+                let isBeat = bass > 230; 
+
+                // 1. HEAVY ORBIT PHYSICS
+                if (isBeat) {
+                    // Slower initial push (0.02 instead of 0.05)
+                    orbitVelocity += map(bass, 230, 255, 0.015, 0.04); 
+                    
+                    tX = random(100, width/2 - 50);
+                    tY = random(100, height/2 - 50);
+                    flareAlpha = 255;
+                    
+                    if(random() > 0.6) glitchTear();
+                }
+
+                orbitVelocity *= friction;
+                currentOrbitAngle += orbitVelocity;
+                
+                // Extremely slow background drift
+                worldRot += 0.0015;
+
+                // 2. BACKGROUND: ROTATING WARP GRID
+                push();
+                translate(width/2, height/2);
+                rotate(worldRot);
+                drawDynamicGrid(bass, isBeat);
+                pop();
+
+                // 3. EDGE PROBES
+                drawEdgeProbes(treble, isBeat);
+
+                flareAlpha *= 0.85;
+                
+                // Spine Physics
+                spine[0].x = lerp(spine[0].x, tX, 0.1);
+                spine[0].y = lerp(spine[0].y, tY, 0.1);
+                for(let i = 1; i < spine.length; i++) {
+                    spine[i].x = lerp(spine[i].x, spine[i-1].x, 0.2);
+                    spine[i].y = lerp(spine[i].y, spine[i-1].y, 0.2);
+                }
+
+                // 4. RENDER HEAVY MIRROR
+                translate(width/2, height/2);
+                drawSharpFlare(flareAlpha);
+
+                for (let xDir = -1; xDir <= 1; xDir += 2) {
+                    for (let yDir = -1; yDir <= 1; yDir += 2) {
+                        push();
+                        let rotDir = (xDir === yDir) ? 1 : -1;
+                        rotate(currentOrbitAngle * rotDir);
+                        scale(xDir, yDir);
+                        drawReflectedRobot(bass, treble, isBeat);
+                        pop();
+                    }
+                }
+            }
+        }
+
+        function drawDynamicGrid(bass, isBeat) {
+            let step = 100;
+            stroke(isBeat ? 160 : 35, 0, 0);
+            strokeWeight(1);
+            noFill();
+            for (let x = -width; x <= width; x += step) {
+                beginShape();
+                for (let y = -height; y <= height; y += 120) {
+                    let d = dist(x, y, tX, tY);
+                    let warp = map(d, 0, 600, 130, 0, true);
+                    let angle = atan2(y - tY, x - tX);
+                    vertex(x - cos(angle) * warp, y - sin(angle) * warp);
+                }
+                endShape();
+            }
+        }
+
+        function drawEdgeProbes(treble, isBeat) {
+            stroke(0, 255, 255, 30);
+            strokeWeight(0.5);
+            let intensity = map(treble, 0, 255, 0, 320);
+            for(let i=0; i<width; i+=250) {
+                line(i, 0, tX + width/2, tY + height/2 - intensity);
+                line(i, height, tX + width/2, tY + height/2 + intensity);
+            }
+        }
+
+        function drawSharpFlare(alpha) {
+            stroke(255, alpha);
+            strokeWeight(2);
+            line(-width, 0, width, 0);
+            line(0, -height, 0, height);
+        }
+
+        function drawReflectedRobot(bass, treble, isBeat) {
+            for (let i = 0; i < spine.length; i++) {
+                let s = spine[i];
+                let val = dataArray[i % dataArray.length];
+                let armLen = map(val, 0, 255, 30, width/2.2);
+                let col = isBeat ? color(255, 0, 0) : (val > 200 ? color(255) : color(0, 255, 255, 200));
+
+                stroke(col);
+                strokeWeight(map(val, 0, 255, 1, 10)); // Slightly thicker for visual weight
+                let x = s.x - width/2;
+                let y = s.y - height/2;
+
+                rectMode(CENTER);
+                rect(x, y, 50, 25); 
+                line(x, y, x + armLen, y);
+                
+                if(val > 180) {
+                    strokeWeight(2);
+                    line(x + armLen, y - 70, x + armLen, y + 70);
+                    stroke(col, 50);
+                    strokeWeight(0.5);
+                    line(x + armLen, y, 0, 0);
+                }
+            }
+        }
+
+        function glitchTear() {
+            let y = random(height);
+            let h = random(30, 70);
+            copy(0, y, width, h, random(-120, 120), y, width, h);
+        }
+
+        function getAvg(s, e) {
+            let total = 0;
+            for (let i = s; i <= e; i++) total += dataArray[i];
+            return total / (e - s + 1);
+        }
+
+        function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+    </script>
+</body>
+</html>
